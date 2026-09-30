@@ -5,6 +5,7 @@ import { usePrinter } from '../../components/PrintProvider';
 import { CURRENCIES, amountToWords } from '../../core/amountToWords';
 import {
   EMPTY_DRAFT,
+  isAmountWordsTruncated,
   resolveValues,
   type ChequeDraft,
 } from '../../core/chequeDraft';
@@ -31,6 +32,11 @@ export function EntryPage() {
     () => (template ? resolveValues(template.fields, draft, lang) : {}),
     [template, draft, lang],
   );
+  const amountWordsTruncated = useMemo(
+    () =>
+      template ? isAmountWordsTruncated(template.fields, draft, lang) : false,
+    [template, draft, lang],
+  );
 
   function patch(next: Partial<ChequeDraft>) {
     setDraft((prev) => ({ ...prev, ...next }));
@@ -39,13 +45,17 @@ export function EntryPage() {
 
   async function handlePrint() {
     if (!template || !settings?.activeCompanyId) return;
-    await printer.print({
+    const printed = await printer.print({
       template,
       pages: [values],
       showBackground: settings.printBackground,
       offsetX: template.offsetX,
       offsetY: template.offsetY,
     });
+    if (!printed) {
+      setStatus('لم يتم حفظ الشيك في السجل لأن الطباعة لم تكتمل بنجاح.');
+      return;
+    }
     await saveCheque({
       draft,
       template,
@@ -112,6 +122,16 @@ export function EntryPage() {
             >
               هذا النموذج لم تتم معايرته بعد. افتح «تصميم القوالب»، ارفع صورة
               شيك حقيقي، واضبط أماكن الحقول قبل الطباعة الفعلية.
+            </p>
+          )}
+          {amountWordsTruncated && (
+            <p
+              className='warn'
+              style={{ marginTop: 12 }}
+            >
+              تحذير: المبلغ كتابةً أطول من المساحة المتاحة في القالب وسيظهر
+              مبتوراً عند الطباعة. أضف حقل «المبلغ كتابةً (سطر ٢)» أو وسّع الحقل
+              من «تصميم القوالب».
             </p>
           )}
           {template && (

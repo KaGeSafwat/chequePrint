@@ -59,3 +59,59 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<void>
   const current = (await db.settings.get('app')) ?? DEFAULT_SETTINGS;
   await db.settings.put({ ...current, ...patch, key: 'app' });
 }
+
+export const BACKUP_VERSION = 1;
+
+export interface BackupData {
+  version: typeof BACKUP_VERSION;
+  exportedAt: string;
+  banks: Bank[];
+  companies: Company[];
+  templates: ChequeTemplate[];
+  cheques: ChequeRecord[];
+  settings: AppSettings[];
+}
+
+export async function exportBackup(): Promise<BackupData> {
+  const [banks, companies, templates, cheques, settings] = await Promise.all([
+    db.banks.toArray(),
+    db.companies.toArray(),
+    db.templates.toArray(),
+    db.cheques.toArray(),
+    db.settings.toArray(),
+  ]);
+  return { version: BACKUP_VERSION, exportedAt: new Date().toISOString(), banks, companies, templates, cheques, settings };
+}
+
+export function isBackupData(value: unknown): value is BackupData {
+  const data = value as Partial<BackupData> | null;
+  return (
+    !!data &&
+    data.version === BACKUP_VERSION &&
+    Array.isArray(data.banks) &&
+    Array.isArray(data.companies) &&
+    Array.isArray(data.templates) &&
+    Array.isArray(data.cheques) &&
+    Array.isArray(data.settings)
+  );
+}
+
+/** Replaces all local data with the contents of a previously exported backup. */
+export async function importBackup(data: BackupData): Promise<void> {
+  await db.transaction('rw', db.banks, db.companies, db.templates, db.cheques, db.settings, async () => {
+    await Promise.all([
+      db.banks.clear(),
+      db.companies.clear(),
+      db.templates.clear(),
+      db.cheques.clear(),
+      db.settings.clear(),
+    ]);
+    await Promise.all([
+      db.banks.bulkAdd(data.banks),
+      db.companies.bulkAdd(data.companies),
+      db.templates.bulkAdd(data.templates),
+      db.cheques.bulkAdd(data.cheques),
+      db.settings.bulkAdd(data.settings),
+    ]);
+  });
+}

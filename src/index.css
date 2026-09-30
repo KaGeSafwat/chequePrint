@@ -257,6 +257,34 @@ textarea {
   font-size: 12px;
 }
 
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 36, 64, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.confirm-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 22px;
+  max-width: 360px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(31, 36, 64, 0.25);
+}
+
+.confirm-box p {
+  margin: 0 0 16px;
+  font-weight: 600;
+}
+
+.confirm-box .btn-bar {
+  justify-content: center;
+}
+
 .error {
   color: var(--danger);
   font-size: 12px;

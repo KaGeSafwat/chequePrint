@@ -204,6 +204,8 @@ export function DesignerPage() {
       showBackground: false,
       offsetX: draft.offsetX,
       offsetY: draft.offsetY,
+      // A test print doesn't save any record, so no confirmation step is needed.
+      requireConfirmation: false,
     });
   }
 

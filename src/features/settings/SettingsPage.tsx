@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { CURRENCIES } from '../../core/amountToWords';
 import { defaultTemplateFor } from '../../data/defaultTemplates';
-import { db, updateSettings } from '../../data/db';
+import {
+  db,
+  exportBackup,
+  importBackup,
+  isBackupData,
+  updateSettings,
+} from '../../data/db';
 import {
   useBanks,
   useCompanies,
@@ -19,6 +25,8 @@ export function SettingsPage() {
   const [companyName, setCompanyName] = useState('');
   const [bankName, setBankName] = useState('');
   const [templateName, setTemplateName] = useState('');
+  const [backupError, setBackupError] = useState('');
+  const [backupStatus, setBackupStatus] = useState('');
 
   async function addCompany() {
     const name = companyName.trim();
@@ -50,17 +58,13 @@ export function SettingsPage() {
   }
 
   async function deleteTemplate(id: number) {
-    const remaining = await db.templates
-      .where('bankId')
-      .equals(settings!.activeBankId!)
-      .count();
+    const bankId = settings?.activeBankId;
+    if (!bankId) return;
+    const remaining = await db.templates.where('bankId').equals(bankId).count();
     if (remaining <= 1) return;
     await db.templates.delete(id);
     if (settings?.activeTemplateId === id) {
-      const next = await db.templates
-        .where('bankId')
-        .equals(settings.activeBankId!)
-        .first();
+      const next = await db.templates.where('bankId').equals(bankId).first();
       await updateSettings({ activeTemplateId: next?.id });
     }
   }
@@ -73,6 +77,41 @@ export function SettingsPage() {
       ...structuredClone(rest),
       name: `${source.name} — نسخة`,
     });
+  }
+
+  async function handleExportBackup() {
+    const data = await exportBackup();
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cheque-printer-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleImportBackup(file: File) {
+    setBackupError('');
+    setBackupStatus('');
+    let data: unknown;
+    try {
+      data = JSON.parse(await file.text());
+    } catch {
+      setBackupError('ملف النسخة الاحتياطية تالف أو ليس بصيغة JSON صحيحة.');
+      return;
+    }
+    if (!isBackupData(data)) {
+      setBackupError('صيغة ملف النسخة الاحتياطية غير معروفة أو غير متوافقة.');
+      return;
+    }
+    const confirmed = window.confirm(
+      'سيتم استبدال كل البيانات الحالية (البنوك، الشركات، القوالب، وسجل الشيكات) بمحتوى هذا الملف. هل تريد المتابعة؟',
+    );
+    if (!confirmed) return;
+    await importBackup(data);
+    setBackupStatus('تم استيراد النسخة الاحتياطية بنجاح.');
   }
 
   return (
@@ -296,6 +335,40 @@ export function SettingsPage() {
             عدّل «إزاحة الطباعة» في صفحة تصميم القوالب حتى تنطبق البيانات على
             أماكنها.
           </p>
+        </div>
+
+        <div className='panel'>
+          <h3 className='panel-title'>نسخ احتياطي واستعادة</h3>
+          <p className='hint'>
+            كل البيانات محفوظة داخل هذا المتصفح فقط. صدّر نسخة احتياطية بشكل
+            دوري لتفادي فقدان سجل الشيكات عند مسح بيانات المتصفح.
+          </p>
+          <div
+            className='btn-bar'
+            style={{ marginTop: 10 }}
+          >
+            <button
+              className='btn'
+              onClick={handleExportBackup}
+            >
+              تصدير نسخة احتياطية
+            </button>
+            <label className='btn'>
+              استيراد نسخة احتياطية
+              <input
+                type='file'
+                accept='application/json'
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImportBackup(file);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          </div>
+          {backupError && <p className='error'>{backupError}</p>}
+          {backupStatus && <p className='hint'>{backupStatus}</p>}
         </div>
       </aside>
     </div>

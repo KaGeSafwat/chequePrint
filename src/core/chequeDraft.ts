@@ -113,3 +113,22 @@ export function resolveValues(
   }
   return values;
 }
+
+/**
+ * True when the amount-in-words text would not fully fit in the template's field(s),
+ * meaning the printed cheque would show a shortened, legally incorrect amount.
+ */
+export function isAmountWordsTruncated(fields: ChequeField[], draft: ChequeDraft, lang: Lang): boolean {
+  const line1 = fields.find((f) => f.key === 'amountWords' && f.visible);
+  if (!line1 || line1.multiline) return false;
+
+  const full = resolveFieldValue(line1, draft, lang);
+  const [, tail] = splitWords(full, charCapacity(line1));
+  if (!tail) return false;
+
+  const line2 = fields.find((f) => f.key === 'amountWordsLine2' && f.visible);
+  if (!line2) return true;
+
+  const [, tail2] = splitWords(tail, charCapacity(line2));
+  return tail2.length > 0;
+}

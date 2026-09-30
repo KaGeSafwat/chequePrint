@@ -4,6 +4,7 @@ import { usePrinter } from '../../components/PrintProvider';
 import { getCurrency } from '../../core/amountToWords';
 import {
   EMPTY_DRAFT,
+  isAmountWordsTruncated,
   resolveValues,
   type ChequeDraft,
 } from '../../core/chequeDraft';
@@ -138,25 +139,28 @@ export function ExcelImport({
       if (!Number.isFinite(amount) || amount <= 0) errors.push('مبلغ غير صالح');
       if (!beneficiary) errors.push('المستفيد مطلوب');
 
-      return {
-        errors,
-        draft: {
-          ...EMPTY_DRAFT,
-          date: date || EMPTY_DRAFT.date,
-          beneficiary,
-          amount: Number.isFinite(amount) ? amount : 0,
-          currency: getCurrency(currencyRaw || 'EGP').code,
-          signatory: String(
-            mapping.signatory ? (row[mapping.signatory] ?? '') : '',
-          ).trim(),
-          chequeNumber: String(
-            mapping.chequeNumber ? (row[mapping.chequeNumber] ?? '') : '',
-          ).trim(),
-          notes: String(mapping.notes ? (row[mapping.notes] ?? '') : '').trim(),
-        },
+      const draft = {
+        ...EMPTY_DRAFT,
+        date: date || EMPTY_DRAFT.date,
+        beneficiary,
+        amount: Number.isFinite(amount) ? amount : 0,
+        currency: getCurrency(currencyRaw || 'EGP').code,
+        signatory: String(
+          mapping.signatory ? (row[mapping.signatory] ?? '') : '',
+        ).trim(),
+        chequeNumber: String(
+          mapping.chequeNumber ? (row[mapping.chequeNumber] ?? '') : '',
+        ).trim(),
+        notes: String(mapping.notes ? (row[mapping.notes] ?? '') : '').trim(),
       };
+
+      if (isAmountWordsTruncated(template.fields, draft, lang)) {
+        errors.push('المبلغ كتابةً أطول من مساحة القالب');
+      }
+
+      return { errors, draft };
     });
-  }, [rows, mapping]);
+  }, [rows, mapping, template, lang]);
 
   const validRows = parsed.filter((r) => r.errors.length === 0);
 
@@ -216,13 +220,17 @@ export function ExcelImport({
       const pages = validRows.map((r) =>
         resolveValues(template.fields, r.draft, lang),
       );
-      await printer.print({
+      const printed = await printer.print({
         template,
         pages,
         showBackground: printBackground,
         offsetX: template.offsetX,
         offsetY: template.offsetY,
       });
+      if (!printed) {
+        setStatus('لم يتم حفظ أي شيك في السجل لأن الطباعة لم تكتمل بنجاح.');
+        return;
+      }
       for (const r of validRows) {
         await saveCheque({
           draft: r.draft,
