@@ -157,8 +157,8 @@ export function amountToWords(amount: number, currencyCode: string, lang: Lang =
 export function formatAmountNumber(amount: number): string {
   if (!Number.isFinite(amount)) return '';
   const { sub } = splitAmount(amount);
-  return amount.toLocaleString('en-US', {
+  return `#${amount.toLocaleString('en-US', {
     minimumFractionDigits: sub ? 2 : 0,
     maximumFractionDigits: 2,
-  });
+  })}#`;
 }
